@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="robots" content="noindex, nofollow" />
+<title>농구 슈팅 자세 분석</title>
+<style>
+  :root{
+    --bg:#0f1320; --card:#1a2032; --card2:#222a40; --line:#2e3650;
+    --txt:#e9edf7; --sub:#9aa6c4; --accent:#ff7a33; --good:#2fc77f; --warn:#ffb020; --bad:#ff5d5d;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    line-height:1.55;padding:env(safe-area-inset-top) 0 40px;}
+  header{padding:18px 16px 10px;text-align:center}
+  header h1{font-size:20px;margin:0 0 4px;font-weight:800;letter-spacing:-.3px}
+  header p{margin:0;color:var(--sub);font-size:13px}
+  .wrap{max-width:560px;margin:0 auto;padding:0 14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-top:14px}
+  .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
+    border:none;border-radius:14px;padding:15px;font-size:16px;font-weight:700;cursor:pointer}
+  .btn-primary{background:var(--accent);color:#1a1205}
+  .btn-primary:active{filter:brightness(.92)}
+  .btn-ghost{background:var(--card2);color:var(--txt);border:1px solid var(--line)}
+  .btn-rec{background:#e23b3b;color:#fff}
+  .btn[disabled]{opacity:.5;cursor:not-allowed}
+  .row{display:flex;gap:10px}
+  .row .btn{flex:1}
+  input[type=file]{display:none}
+  label.file{display:block;flex:1}
+  .hint{font-size:12.5px;color:var(--sub);margin-top:12px;background:var(--card2);border-radius:10px;padding:11px 12px}
+  .hint b{color:var(--txt)}
+  .stage{position:relative;width:100%;border-radius:12px;overflow:hidden;background:#000;margin-top:12px;display:none}
+  .stage video{width:100%;display:block;max-height:60vh}
+  .stage canvas{position:absolute;left:0;top:0;width:100%;height:100%}
+  .recdot{position:absolute;top:10px;left:10px;display:none;align-items:center;gap:6px;
+    background:rgba(0,0,0,.5);padding:5px 10px;border-radius:99px;font-size:12px;font-weight:700}
+  .recdot i{width:9px;height:9px;border-radius:50%;background:#ff3b3b;animation:bl 1s infinite}
+  @keyframes bl{50%{opacity:.2}}
+  .progress{display:none;margin-top:14px}
+  .bar{height:10px;background:var(--card2);border-radius:99px;overflow:hidden}
+  .bar > i{display:block;height:100%;width:0;background:var(--accent);transition:width .12s}
+  .progress p{margin:8px 0 0;font-size:13px;color:var(--sub);text-align:center}
+  .score{display:flex;align-items:center;gap:14px}
+  .score .num{font-size:40px;font-weight:800;line-height:1}
+  .score .lab{font-size:13px;color:var(--sub)}
+  .grade{margin-left:auto;font-size:14px;font-weight:800;padding:6px 12px;border-radius:99px}
+  .metric{border-top:1px solid var(--line);padding:14px 0}
+  .metric:first-of-type{border-top:none}
+  .metric .top{display:flex;align-items:center;gap:10px}
+  .metric .name{font-weight:700;font-size:15px}
+  .metric .val{margin-left:auto;font-variant-numeric:tabular-nums;font-size:14px;color:var(--sub)}
+  .tag{font-size:11.5px;font-weight:800;padding:3px 9px;border-radius:99px;white-space:nowrap}
+  .tag.good{background:rgba(47,199,127,.15);color:var(--good)}
+  .tag.warn{background:rgba(255,176,32,.15);color:var(--warn)}
+  .tag.bad{background:rgba(255,93,93,.15);color:var(--bad)}
+  .tag.na{background:rgba(154,166,196,.15);color:var(--sub)}
+  .metric .msg{font-size:13.5px;color:#cdd5ec;margin-top:8px}
+  .metric .fix{font-size:13px;color:var(--sub);margin-top:5px}
+  .metric .fix b{color:var(--accent)}
+  .frames{display:flex;gap:8px;margin-top:6px}
+  .frames figure{flex:1;margin:0;text-align:center}
+  .frames canvas{width:100%;background:#000;border-radius:10px;border:1px solid var(--line)}
+  .frames figcaption{font-size:11.5px;color:var(--sub);margin-top:4px}
+  .note{font-size:12.5px;color:var(--sub);background:var(--card2);border-radius:10px;padding:11px 12px;margin-top:12px}
+  .note b{color:var(--txt)}
+  .quality{font-size:12.5px;border-radius:10px;padding:10px 12px;margin-top:12px;display:none}
+  .quality.ok{background:rgba(47,199,127,.12);color:#bdebd4}
+  .quality.warn{background:rgba(255,176,32,.12);color:#f3dca6}
+  .err{color:var(--bad);font-size:13px;margin-top:10px;display:none;background:rgba(255,93,93,.1);padding:11px 12px;border-radius:10px}
+  details{margin-top:12px}
+  summary{cursor:pointer;color:var(--sub);font-size:13px}
+  details ul{margin:8px 0 0;padding-left:18px;color:var(--sub);font-size:12.5px}
+  details li{margin:3px 0}
+  .hide{display:none!important}
+  .modelrow{display:flex;gap:9px;align-items:flex-start;margin-top:12px;background:var(--card2);
+    border-radius:10px;padding:11px 12px;font-size:12.5px;color:var(--sub);cursor:pointer}
+  .modelrow input{margin-top:2px;accent-color:var(--accent)}
+  .modelrow b{color:var(--txt)}
+</style>
+</head>
+<body>
+<header>
+  <h1>🏀 농구 슈팅 자세 분석</h1>
+  <p>측면에서 찍은 슈팅 영상으로 자세를 진단합니다</p>
+</header>
+
+<div class="wrap">
+
+  <!-- 1) 입력 -->
+  <div class="card" id="inputCard">
+    <div class="row">
+      <button class="btn btn-rec" id="camBtn">📹 카메라로 촬영</button>
+      <label class="file">
+        <input type="file" id="filePick" accept="video/*" />
+        <span class="btn btn-ghost">🖼️ 영상 불러오기</span>
+      </label>
+    </div>
+
+    <div class="stage" id="stage">
+      <video id="video" playsinline muted></video>
+      <canvas id="liveCanvas"></canvas>
+      <div class="recdot" id="recDot"><i></i> 녹화 중</div>
+    </div>
+
+    <button class="btn btn-rec hide" id="recBtn" style="margin-top:12px">● 녹화 시작</button>
+    <button class="btn btn-primary hide" id="analyzeBtn" style="margin-top:12px">자세 분석 시작</button>
+
+    <div class="progress" id="progress">
+      <div class="bar"><i id="barFill"></i></div>
+      <p id="progressTxt">분석 준비 중…</p>
+    </div>
+    <p class="err" id="err"></p>
+
+    <label class="modelrow">
+      <input type="checkbox" id="preciseChk" />
+      <span><b>정밀 모드</b> — 무거운 AI 모델 사용. 더 정밀하지만 스마트폰에서는 느리고 프레임을 놓칠 수 있어요. 컴퓨터에서 권장.</span>
+    </label>
+
+    <div class="hint">
+      <b>정확한 분석을 위한 촬영 팁 (중요)</b><br>
+      • 반드시 <b>옆(측면)</b>에서 촬영 — 정면은 각도가 왜곡돼 점수가 부정확합니다<br>
+      • <b>한 번의 슛 동작만</b> 담긴 짧은 영상(2~5초). 드리블·이동이 섞이면 정확도가 떨어집니다<br>
+      • 몸이 화면에 <b>크게</b> 들어오도록 가까이서, 밝은 곳에서 촬영
+    </div>
+  </div>
+
+  <!-- 2) 결과 -->
+  <div class="card hide" id="resultCard">
+    <div class="score">
+      <div>
+        <div class="num" id="scoreNum">–</div>
+        <div class="lab">100점 만점 자세 점수</div>
+      </div>
+      <div class="grade" id="grade"></div>
+    </div>
+    <div class="quality" id="quality"></div>
+    <div class="frames">
+      <figure><canvas id="setCanvas" width="240" height="300"></canvas><figcaption>셋업(준비) 순간</figcaption></figure>
+      <figure><canvas id="relCanvas" width="240" height="300"></canvas><figcaption>릴리스(공 놓는) 순간</figcaption></figure>
+    </div>
+    <div id="metrics"></div>
+    <div class="note" id="overall"></div>
+    <details>
+      <summary>분석 기준이 궁금하다면 (규칙 기반 설명)</summary>
+      <ul>
+        <li><b>셋업 팔꿈치 각도</b>: 공을 올린 준비 자세의 어깨–팔꿈치–손목 각도. 권장 약 75~105°.</li>
+        <li><b>릴리스 팔 신전</b>: 공을 놓는 순간 팔이 충분히 펴졌는지. 권장 150° 이상.</li>
+        <li><b>무릎 굽힘(하체 파워)</b>: 가장 낮은 자세의 무릎 각도. 권장 약 100~150°.</li>
+        <li><b>몸 정렬(기울기)</b>: 릴리스 때 어깨–엉덩이 선이 수직에서 벗어난 정도. 권장 18° 이내.</li>
+        <li><b>팔꿈치 정렬</b>: 팔꿈치가 손목 아래로 모였는지(닭날개 자세 여부).</li>
+        <li><b>폴로스루</b>: 릴리스 후 손목 스냅(참고 지표).</li>
+      </ul>
+      <p style="color:var(--sub);font-size:12px;margin-top:8px">
+        2D 영상 분석이라 촬영 각도에 따라 오차가 있습니다. 신뢰도가 낮은 항목은 "측정 어려움"으로 표시하고
+        점수에서 제외합니다. 측면·근접·단일슛 영상일수록 정확합니다.
+      </p>
+    </details>
+    <button class="btn btn-ghost" id="againBtn" style="margin-top:14px">다른 영상 분석하기</button>
+  </div>
+
+</div>
+
+<script type="module">
+import { FilesetResolver, PoseLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+const $ = id => document.getElementById(id);
+const video=$('video'), stage=$('stage'), liveCanvas=$('liveCanvas'), lctx=liveCanvas.getContext('2d');
+const analyzeBtn=$('analyzeBtn'), progress=$('progress'), barFill=$('barFill'), progressTxt=$('progressTxt');
+const err=$('err'), inputCard=$('inputCard'), resultCard=$('resultCard');
+const camBtn=$('camBtn'), recBtn=$('recBtn'), recDot=$('recDot');
+
+let poseLandmarker=null, modelReady=null, loadedModel=null;
+let camStream=null, recorder=null, recChunks=[], usingCamera=false;
+
+// ---------- 모델 선택: 모바일=full(빠름·프레임 누락 적음), 컴퓨터=heavy(정밀) ----------
+const MODEL_FULL ="https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
+const MODEL_HEAVY="https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task";
+const isMobile = /Android|iPhone|iPod/i.test(navigator.userAgent)
+  || (navigator.maxTouchPoints>2 && /Mac|iPad/.test(navigator.userAgent));
+const preciseChk=$('preciseChk');
+preciseChk.checked = !isMobile;   // 컴퓨터는 기본 정밀 모드
+
+async function loadModel(){
+  const want = preciseChk.checked ? MODEL_HEAVY : MODEL_FULL;
+  if(modelReady && loadedModel===want) return modelReady;
+  loadedModel=want;
+  modelReady=(async()=>{
+    const vision=await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+    poseLandmarker=await PoseLandmarker.createFromOptions(vision,{
+      baseOptions:{
+        modelAssetPath: want,
+        delegate:"GPU"
+      },
+      runningMode:"VIDEO", numPoses:1,
+      minPoseDetectionConfidence:0.4, minPosePresenceConfidence:0.4, minTrackingConfidence:0.4
+    });
+  })();
+  return modelReady;
+}
+
+// ---------- 카메라 촬영 ----------
+camBtn.addEventListener('click', async ()=>{
+  err.style.display='none';
+  try{
+    if(usingCamera){ stopCamera(); return; }
+    camStream=await navigator.mediaDevices.getUserMedia({
+      video:{ facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720} }, audio:false });
+    video.srcObject=camStream; video.muted=true; await video.play();
+    stage.style.display='block';
+    liveCanvas.width=video.videoWidth||720; liveCanvas.height=video.videoHeight||1280;
+    usingCamera=true; camBtn.textContent='✕ 카메라 끄기';
+    recBtn.classList.remove('hide'); analyzeBtn.classList.add('hide');
+  }catch(ex){ showErr('카메라를 열 수 없습니다. 브라우저 카메라 권한을 허용했는지 확인해 주세요. (' + (ex.message||ex) + ')'); }
+});
+function stopCamera(){
+  if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; }
+  video.srcObject=null; usingCamera=false; camBtn.textContent='📹 카메라로 촬영';
+  recBtn.classList.add('hide'); recDot.style.display='none';
+}
+recBtn.addEventListener('click', ()=>{
+  if(recorder && recorder.state==='recording'){ recorder.stop(); return; }
+  recChunks=[];
+  let mime='video/webm';
+  if(MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('video/mp4')) mime='video/mp4';
+  try{ recorder=new MediaRecorder(camStream,{mimeType:mime}); }
+  catch(_){ recorder=new MediaRecorder(camStream); }
+  recorder.ondataavailable=e=>{ if(e.data.size>0) recChunks.push(e.data); };
+  recorder.onstop=()=>{
+    const blob=new Blob(recChunks,{type:recChunks[0]?recChunks[0].type:'video/webm'});
+    stopCamera();
+    const url=URL.createObjectURL(blob);
+    video.srcObject=null; video.src=url; video.muted=true;
+    video.onloadeddata=()=>{ analyzeBtn.classList.remove('hide'); };
+    recDot.style.display='none'; recBtn.classList.add('hide');
+  };
+  recorder.start();
+  recDot.style.display='flex'; recBtn.textContent='■ 녹화 정지';
+  analyzeBtn.classList.add('hide');
+});
+
+// ---------- 파일 불러오기 ----------
+$('filePick').addEventListener('change', e=>{
+  const f=e.target.files&&e.target.files[0]; if(!f) return;
+  err.style.display='none'; stopCamera();
+  video.srcObject=null; video.src=URL.createObjectURL(f); video.muted=true;
+  video.onloadeddata=()=>{
+    stage.style.display='block';
+    liveCanvas.width=video.videoWidth; liveCanvas.height=video.videoHeight;
+    analyzeBtn.classList.remove('hide'); recBtn.classList.add('hide');
+    try{ video.currentTime=0; }catch(_){}
+  };
+});
+
+$('againBtn').addEventListener('click', ()=>{
+  resultCard.classList.add('hide'); inputCard.classList.remove('hide');
+  analyzeBtn.classList.add('hide'); recBtn.classList.add('hide');
+  stage.style.display='none'; progress.style.display='none';
+  $('filePick').value=''; video.removeAttribute('src'); video.srcObject=null; video.load();
+});
+
+function showErr(m){ err.textContent='⚠️ '+m; err.style.display='block'; }
+
+// ---------- 분석 시작 ----------
+analyzeBtn.addEventListener('click', async ()=>{
+  try{
+    analyzeBtn.disabled=true; err.style.display='none';
+    progress.style.display='block'; barFill.style.width='3%';
+    progressTxt.textContent='AI 모델 불러오는 중… (첫 실행은 수 초 걸려요)';
+    await loadModel();
+
+    const frames=await sampleFrames();   // [{t,lm,bmp}]
+    if(frames.length<5){
+      throw new Error('사람의 자세를 충분히 인식하지 못했습니다. 몸이 더 크게 보이도록 가까이서, 측면으로 다시 촬영해 주세요.');
+    }
+    progressTxt.textContent='자세 계산 중…';
+    const report=analyzeShot(frames);
+    await renderReport(report, frames);
+
+    inputCard.classList.add('hide'); resultCard.classList.remove('hide');
+    window.scrollTo({top:0,behavior:'smooth'});
+  }catch(ex){ showErr(ex.message||ex); }
+  finally{ analyzeBtn.disabled=false; progress.style.display='none'; }
+});
+
+// 영상을 재생하며 프레임 추출 (재생 기반 = 촬영본·업로드본 모두 안정적으로 동작)
+async function sampleFrames(){
+  const frames=[]; let lastTs=-1;
+  video.muted=true; video.playbackRate=1;
+  try{ video.currentTime=0; }catch(_){}
+  const dur=(isFinite(video.duration)&&video.duration>0)?video.duration:0;
+
+  // requestVideoFrameCallback 지원 시 사용, 아니면 seek 방식
+  if('requestVideoFrameCallback' in HTMLVideoElement.prototype){
+    await video.play().catch(()=>{});
+    await new Promise(resolve=>{
+      let done=false;
+      const finish=()=>{ if(done)return; done=true; resolve(); };
+      const onFrame=async (now, meta)=>{
+        const t=meta.mediaTime;
+        let ts=Math.round(t*1000); if(ts<=lastTs) ts=lastTs+1; lastTs=ts;
+        let res=null; try{ res=poseLandmarker.detectForVideo(video, ts); }catch(_){}
+        if(res&&res.landmarks&&res.landmarks.length){
+          const lm=res.landmarks[0];
+          let bmp=null; try{ bmp=await createImageBitmap(video,{resizeWidth:360,resizeQuality:'low'}); }catch(_){}
+          frames.push({t, lm, bmp});
+          drawSkeleton(lctx, lm, liveCanvas.width, liveCanvas.height, true);
+        }
+        if(dur){ const p=Math.min(99,Math.round((t/dur)*100)); barFill.style.width=Math.max(3,p)+'%'; progressTxt.textContent=`자세 추출 중… ${p}%`; }
+        else { progressTxt.textContent=`자세 추출 중… ${frames.length}프레임`; }
+        if(video.ended||video.paused) finish(); else video.requestVideoFrameCallback(onFrame);
+      };
+      video.addEventListener('ended', finish, {once:true});
+      video.requestVideoFrameCallback(onFrame);
+      setTimeout(finish, 20000); // 안전장치
+    });
+    video.pause();
+  } else {
+    // 폴백: seek 방식
+    const d=dur||1; const step=Math.max(0.04,d/100);
+    for(let t=0;t<d;t+=step){
+      await seekTo(t);
+      let ts=Math.round(t*1000); if(ts<=lastTs)ts=lastTs+1; lastTs=ts;
+      let res=null; try{ res=poseLandmarker.detectForVideo(video,ts); }catch(_){}
+      if(res&&res.landmarks&&res.landmarks.length){
+        const lm=res.landmarks[0]; let bmp=null;
+        try{ bmp=await createImageBitmap(video,{resizeWidth:360,resizeQuality:'low'}); }catch(_){}
+        frames.push({t,lm,bmp});
+        drawSkeleton(lctx,lm,liveCanvas.width,liveCanvas.height,true);
+      }
+      const p=Math.round((t/d)*100); barFill.style.width=Math.max(3,p)+'%'; progressTxt.textContent=`자세 추출 중… ${p}%`;
+    }
+  }
+  return frames;
+}
+function seekTo(t){ return new Promise(res=>{ const on=()=>{video.removeEventListener('seeked',on);res();}; video.addEventListener('seeked',on); try{video.currentTime=t;}catch(_){res();} }); }
+
+// ---------- 기하 ----------
+const L={ nose:0,lSh:11,rSh:12,lEl:13,rEl:14,lWr:15,rWr:16,lIdx:19,rIdx:20,lHip:23,rHip:24,lKnee:25,rKnee:26,lAnk:27,rAnk:28 };
+function angle(a,b,c){ const ab={x:a.x-b.x,y:a.y-b.y},cb={x:c.x-b.x,y:c.y-b.y};
+  const d=ab.x*cb.x+ab.y*cb.y,m=Math.hypot(ab.x,ab.y)*Math.hypot(cb.x,cb.y)||1e-6;
+  return Math.acos(Math.max(-1,Math.min(1,d/m)))*180/Math.PI; }
+function tilt(top,bot){ const dx=top.x-bot.x,dy=top.y-bot.y; return Math.abs(Math.atan2(dx,-dy)*180/Math.PI); }
+const V = p => (p && (p.visibility===undefined?1:p.visibility));
+const okv = (lm, idxs, th=0.5) => idxs.every(i=>V(lm[i])>=th);
+
+// ---------- 핵심 분석 (신뢰도 게이트 + 슛 구간 격리 + 타당성 검사) ----------
+function analyzeShot(frames){
+  // 슈팅 손: 손목이 충분히 보이는 프레임들에서 더 높이 올라간 쪽
+  let rTop=1,lTop=1;
+  for(const f of frames){
+    if(V(f.lm[L.rWr])>0.5) rTop=Math.min(rTop,f.lm[L.rWr].y);
+    if(V(f.lm[L.lWr])>0.5) lTop=Math.min(lTop,f.lm[L.lWr].y);
+  }
+  const right = rTop<=lTop;
+  const S=right?L.rSh:L.lSh,E=right?L.rEl:L.lEl,W=right?L.rWr:L.lWr,
+        H=right?L.rHip:L.lHip,K=right?L.rKnee:L.lKnee,A=right?L.rAnk:L.lAnk,IDX=right?L.rIdx:L.lIdx;
+
+  // 릴리스 후보: 슈팅손이 가장 높은 지점(손/팔 신뢰도 양호) 중 팔이 가장 펴진 프레임
+  let relI=-1, bestRelY=1;
+  frames.forEach((f,i)=>{ if(V(f.lm[W])>0.25 && f.lm[W].y<bestRelY){ bestRelY=f.lm[W].y; relI=i; } });
+  if(relI<0){ relI=0; }
+  // 피크 근처(±0.5초)에서 팔 신전 최대 프레임을 릴리스로 확정
+  const relT=frames[relI].t;
+  let relExt=-1, relPick=relI;
+  frames.forEach((f,i)=>{
+    if(Math.abs(f.t-relT)<=0.5 && okv(f.lm,[S,E,W],0.3)){
+      const ext=angle(f.lm[S],f.lm[E],f.lm[W]);
+      if(f.lm[W].y < frames[relI].lm[W].y+0.12 && ext>relExt){ relExt=ext; relPick=i; }
+    }
+  });
+  relI=relPick;
+  const relF=frames[relI].lm;
+
+  // 슛 구간: 릴리스 기준 ±0.7초
+  const winLo=relT-0.8, winHi=relT+0.2;
+  const inWin = i => frames[i].t>=winLo && frames[i].t<=winHi;
+
+  // 셋업: 릴리스 이전, 손목이 어깨~머리 높이로 올라온 구간에서 팔꿈치가 가장 굽은(신뢰도 양호) 프레임
+  let setI=-1, setBend=999;
+  for(let i=0;i<relI;i++){
+    if(!inWin(i)) continue; const f=frames[i].lm;
+    if(!okv(f,[S,E,W],0.3)) continue;
+    if(f[W].y < f[S].y+0.18){ const a=angle(f[S],f[E],f[W]); if(a>=50&&a<=150&&a<setBend){ setBend=a; setI=i; } }
+  }
+  if(setI<0){ // 폴백: 릴리스 직전 신뢰도 있는 프레임
+    for(let i=relI-1;i>=0;i--){ if(okv(frames[i].lm,[S,E,W],0.3)){ setI=i; break; } }
+    if(setI<0) setI=Math.max(0,relI-1);
+  }
+  const setF=frames[setI].lm;
+
+  // 크라우치: 슛 구간 내 릴리스 이전, 다리 신뢰도 양호하며 무릎각 타당(40~185)한 프레임 중 최소
+  let crI=-1, crMin=999;
+  for(let i=0;i<=relI;i++){
+    if(!inWin(i)) continue; const f=frames[i].lm;
+    if(!okv(f,[H,K,A],0.4)) continue;
+    const a=angle(f[H],f[K],f[A]);
+    if(a>=40 && a<=185 && a<crMin){ crMin=a; crI=i; }
+  }
+  const crF = crI>=0?frames[crI].lm:null;
+
+  // ----- 지표 (측정 가능 여부 포함) -----
+  const metrics=[];
+
+  // 셋업 팔꿈치 (타당성: 35~155° 밖은 인식 오류로 제외)
+  if(okv(setF,[S,E,W],0.3)){ const a=angle(setF[S],setF[E],setF[W]);
+    if(a>=35&&a<=160) metrics.push(mElbowSet(a)); else metrics.push(na('셋업 팔꿈치 각도')); }
+  else metrics.push(na('셋업 팔꿈치 각도'));
+
+  // 릴리스 신전
+  if(okv(relF,[S,E,W],0.3)){ metrics.push(mElbowRel(angle(relF[S],relF[E],relF[W]))); }
+  else metrics.push(na('릴리스 팔 신전'));
+
+  // 무릎
+  if(crF){ metrics.push(mKnee(crMin)); } else metrics.push(na('무릎 굽힘(하체 파워)'));
+
+  // 몸 기울기 (타당성: 45° 초과면 인식 오류로 보고 제외)
+  if(okv(relF,[S,H],0.4)){
+    const lean=tilt(relF[S],relF[H]);
+    if(lean<=45) metrics.push(mLean(lean)); else metrics.push(na('몸 정렬(기울기)'));
+  } else metrics.push(na('몸 정렬(기울기)'));
+
+  // 팔꿈치 정렬 (타당성: 어깨너비 대비 2배 초과는 인식 오류로 제외)
+  if(okv(setF,[S,E,W,L.lSh,L.rSh],0.3)){
+    const shW=Math.hypot(setF[L.lSh].x-setF[L.rSh].x,setF[L.lSh].y-setF[L.rSh].y)||0.001;
+    const off=Math.abs(setF[E].x-setF[W].x)/shW;
+    if(off<=2.0) metrics.push(mAlign(off)); else metrics.push(na('팔꿈치 정렬'));
+  } else metrics.push(na('팔꿈치 정렬'));
+
+  // 폴로스루(참고)
+  if(relI+2<frames.length && okv(relF,[W,IDX],0.3)){
+    const after=frames[Math.min(relI+2,frames.length-1)].lm;
+    if(okv(after,[W,IDX],0.3)) metrics.push(mSnap(after[IDX].y-after[W].y));
+    else metrics.push(na('폴로스루(참고)'));
+  } else metrics.push(na('폴로스루(참고)'));
+
+  // 점수: 측정 가능한 항목만 평균
+  const measurable=metrics.filter(m=>m.ok);
+  const score = measurable.length? Math.round(measurable.reduce((s,m)=>s+m.pts,0)/measurable.length) : null;
+
+  // 촬영 품질 평가
+  const detRate=frames.length;
+  const okRate = measurable.length/metrics.length;
+  // 정면 추정: 어깨 너비 / 몸통 길이 비율(릴리스 기준)
+  let frontal=false;
+  if(okv(relF,[L.lSh,L.rSh,L.lHip,L.rHip],0.4)){
+    const shW=Math.abs(relF[L.lSh].x-relF[L.rSh].x);
+    const torso=Math.abs(((relF[L.lSh].y+relF[L.rSh].y)/2)-((relF[L.lHip].y+relF[L.rHip].y)/2))||0.001;
+    frontal = (shW/torso)>0.9;
+  }
+  return { right, metrics, score, setIdx:setI, relIdx:relI, frames:detRate, okRate, frontal };
+}
+
+// ----- 채점 (완화된 기준) -----
+function g(v,lo,hi,tol){ if(v>=lo&&v<=hi)return 100; const d=v<lo?lo-v:v-hi; return Math.max(0,Math.round(100-(d/tol)*50)); }
+function tag(pts){ return pts>=75?'good':pts>=50?'warn':'bad'; }
+function na(name){ return { name, ok:false, pts:0, val:'측정 어려움',
+  msg:'이 동작 구간에서 관절 인식 신뢰도가 낮아 정확히 측정하지 못했습니다.',
+  fix:'몸이 더 크게·측면으로 보이도록 촬영하면 측정됩니다.' }; }
+
+function mElbowSet(v){ const pts=g(v,75,105,35); let msg,fix;
+  if(v>115){ msg=`셋업 때 팔꿈치가 ${v.toFixed(0)}°로 다소 펴져 있어요.`; fix='공을 이마 앞쪽에 두고 팔꿈치를 90°에 가깝게 접어 "L자" 셋업을 만들어 보세요.'; }
+  else if(v<65){ msg=`팔꿈치가 ${v.toFixed(0)}°로 다소 과하게 접혔습니다.`; fix='팔꿈치를 살짝 풀어 90° 부근에서 자연스럽게 올려 주세요.'; }
+  else { msg=`셋업 팔꿈치 각도 ${v.toFixed(0)}° — 안정적인 "L자" 준비 자세예요.`; fix='지금 폼을 유지하세요.'; }
+  return { name:'셋업 팔꿈치 각도', ok:true, pts, val:`${v.toFixed(0)}°`, msg, fix }; }
+
+function mElbowRel(v){ const pts=g(v,150,180,30); let msg,fix;
+  if(v<140){ msg=`릴리스 때 팔이 ${v.toFixed(0)}°까지만 펴졌어요.`; fix='공을 놓는 순간 팔꿈치를 끝까지 펴고 손끝이 림을 향하게 뻗어 주세요.'; }
+  else { msg=`릴리스 팔 신전 ${v.toFixed(0)}° — 충분히 잘 뻗었습니다.`; fix='이 마무리 동작을 유지하세요.'; }
+  return { name:'릴리스 팔 신전', ok:true, pts, val:`${v.toFixed(0)}°`, msg, fix }; }
+
+function mKnee(v){ const pts=g(v,100,150,45); let msg,fix;
+  if(v>165){ msg=`무릎 굽힘이 ${v.toFixed(0)}°로 거의 펴진 상태 — 하체 힘을 덜 쓰는 편입니다.`; fix='무릎을 더 굽혔다 펴며 다리 힘으로 공을 밀어 올려 보세요.'; }
+  else if(v<85){ msg=`무릎을 ${v.toFixed(0)}°로 깊게 굽혔어요 — 동작이 느려질 수 있습니다.`; fix='굽힘을 조금 줄여 빠르고 리드미컬하게.'; }
+  else { msg=`무릎 굽힘 ${v.toFixed(0)}° — 하체 파워를 잘 쓰는 자세입니다.`; fix='이 정도 굽힘을 유지하세요.'; }
+  return { name:'무릎 굽힘(하체 파워)', ok:true, pts, val:`${v.toFixed(0)}°`, msg, fix }; }
+
+function mLean(v){ const pts=g(v,0,18,22); let msg,fix;
+  if(v>18){ msg=`릴리스 때 상체가 수직에서 ${v.toFixed(0)}° 기울었어요.`; fix='머리·어깨·엉덩이를 한 축으로 세우고 곧게 위로 점프하며 쏘세요.'; }
+  else { msg=`상체 기울기 ${v.toFixed(0)}° — 균형이 잘 잡혀 있습니다.`; fix='곧은 자세를 유지하세요.'; }
+  return { name:'몸 정렬(기울기)', ok:true, pts, val:`${v.toFixed(0)}°`, msg, fix }; }
+
+function mAlign(off){ const pts=off<=0.4?100:off<=0.7?70:Math.max(0,Math.round(100-(off-0.4)*150)); let msg,fix;
+  if(off>0.7){ msg='팔꿈치가 바깥으로 벌어진 "닭날개" 경향이 보입니다.'; fix='팔꿈치를 손목·공 아래로 모아 일직선으로 정렬해 보세요.'; }
+  else if(off>0.4){ msg='팔꿈치가 살짝 바깥으로 벌어져 있습니다.'; fix='팔꿈치를 조금 안쪽으로 모아 손목 아래에 두세요.'; }
+  else { msg='팔꿈치가 손목 아래로 잘 정렬되어 있습니다.'; fix='이 정렬을 유지하세요.'; }
+  return { name:'팔꿈치 정렬', ok:true, pts, val:`${(off*100).toFixed(0)}%`, msg, fix }; }
+
+function mSnap(s){ const pts=s>0.02?100:s>-0.01?70:50; let msg,fix;
+  if(s>0.02){ msg='릴리스 후 손목이 아래로 꺾이는 폴로스루(스냅)가 보입니다.'; fix='손끝이 바닥을 가리키는 "백조 목" 마무리를 유지하세요.'; }
+  else { msg='폴로스루(손목 스냅)가 약해 보입니다.'; fix='공을 놓은 뒤 손목을 아래로 부드럽게 꺾어 회전을 주세요.'; }
+  return { name:'폴로스루(참고)', ok:true, pts, val:s>0?'스냅 있음':'약함', msg, fix }; }
+
+// ---------- 그리기 ----------
+const CONN=[[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28],[15,19],[16,20]];
+function drawSkeleton(ctx,lm,w,h,clear){
+  if(clear) ctx.clearRect(0,0,w,h);
+  ctx.lineWidth=Math.max(2,w/180); ctx.strokeStyle='rgba(255,122,51,.9)';
+  for(const [a,b] of CONN){ if(V(lm[a])<0.4||V(lm[b])<0.4) continue;
+    ctx.beginPath(); ctx.moveTo(lm[a].x*w,lm[a].y*h); ctx.lineTo(lm[b].x*w,lm[b].y*h); ctx.stroke(); }
+  ctx.fillStyle='#fff';
+  for(const p of lm){ if(V(p)<0.4)continue; ctx.beginPath(); ctx.arc(p.x*w,p.y*h,Math.max(2,w/160),0,7); ctx.fill(); }
+}
+function drawCapture(canvas, frame){
+  const ctx=canvas.getContext('2d'), cw=canvas.width, ch=canvas.height;
+  ctx.clearRect(0,0,cw,ch);
+  if(frame.bmp){
+    const vr=frame.bmp.width/frame.bmp.height, cr=cw/ch; let dw,dh,dx,dy;
+    if(vr>cr){ dh=ch; dw=ch*vr; dx=(cw-dw)/2; dy=0; } else { dw=cw; dh=cw/vr; dx=0; dy=(ch-dh)/2; }
+    ctx.drawImage(frame.bmp,dx,dy,dw,dh);
+    ctx.save(); ctx.translate(dx,dy); drawSkeleton(ctx,frame.lm,dw,dh,false); ctx.restore();
+  } else { ctx.fillStyle='#000'; ctx.fillRect(0,0,cw,ch); drawSkeleton(ctx,frame.lm,cw,ch,false); }
+}
+
+// ---------- 결과 렌더 ----------
+async function renderReport(rep, frames){
+  const sc=rep.score;
+  $('scoreNum').textContent = sc===null?'–':sc;
+  const gr=$('grade'); let grade,color;
+  if(sc===null){ grade='측정 부족'; color='var(--sub)'; }
+  else if(sc>=85){ grade='훌륭함'; color='var(--good)'; }
+  else if(sc>=70){ grade='좋음'; color='var(--good)'; }
+  else if(sc>=55){ grade='보통'; color='var(--warn)'; }
+  else { grade='교정 필요'; color='var(--bad)'; }
+  gr.textContent=grade; gr.style.color=color;
+
+  // 품질 안내
+  const q=$('quality');
+  if(rep.frontal || rep.okRate<0.5){
+    q.className='quality warn'; q.style.display='block';
+    q.innerHTML = (rep.frontal? '⚠️ <b>정면에 가까운 영상</b>으로 보입니다. 각도 측정이 부정확할 수 있어요 — 옆(측면)에서 다시 찍으면 정확해집니다. ' : '')
+      + (rep.okRate<0.5? '일부 항목은 관절 인식 신뢰도가 낮아 점수에서 제외했습니다. 몸이 더 크게 보이도록 가까이서 촬영해 보세요.' : '');
+  } else {
+    q.className='quality ok'; q.style.display='block';
+    q.innerHTML='✅ 측면·근접 촬영으로 인식 품질이 양호합니다.';
+  }
+
+  const box=$('metrics'); box.innerHTML='';
+  for(const m of rep.metrics){
+    const t=m.ok?tag(m.pts):'na';
+    const label=!m.ok?'측정X':t==='good'?'좋음':t==='warn'?'주의':'교정';
+    const el=document.createElement('div'); el.className='metric';
+    el.innerHTML=`<div class="top"><span class="name">${m.name}</span>
+      <span class="tag ${t}">${label}</span><span class="val">${m.val}</span></div>
+      <div class="msg">${m.msg}</div><div class="fix"><b>교정 →</b> ${m.fix}</div>`;
+    box.appendChild(el);
+  }
+
+  const bad=rep.metrics.filter(m=>m.ok&&m.pts<50).length, warn=rep.metrics.filter(m=>m.ok&&m.pts>=50&&m.pts<75).length;
+  let oa=`슈팅 손은 <b>${rep.right?'오른손':'왼손'}</b>으로 인식했습니다. `;
+  if(rep.score===null) oa+='측정 가능한 항목이 부족합니다. 측면·근접·단일슛 영상으로 다시 시도해 주세요.';
+  else if(bad===0&&warn===0) oa+='측정된 항목들이 모두 안정적이에요. 지금 자세를 반복 연습으로 굳히세요.';
+  else oa+=`교정 필요 ${bad}개, 주의 ${warn}개 항목이 있어요. 위의 "교정 →" 부분부터 하나씩 고쳐 보세요.`;
+  $('overall').innerHTML=oa;
+
+  drawCapture($('setCanvas'), frames[rep.setIdx]);
+  drawCapture($('relCanvas'), frames[rep.relIdx]);
+}
+</script>
+</body>
+</html>
