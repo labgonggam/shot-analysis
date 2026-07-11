@@ -32,9 +32,12 @@
   label.file{display:block;flex:1}
   .hint{font-size:12.5px;color:var(--sub);margin-top:12px;background:var(--card2);border-radius:10px;padding:11px 12px}
   .hint b{color:var(--txt)}
-  .stage{position:relative;width:100%;border-radius:12px;overflow:hidden;background:#000;margin-top:12px;display:none}
-  .stage video{width:100%;display:block;max-height:60vh}
-  .stage canvas{position:absolute;left:0;top:0;width:100%;height:100%}
+  /* 사람 주변만 확대해 보여주는 크롭 뷰. 배경이 화면을 잡아먹지 않도록 비율 고정 */
+  .stage{position:relative;width:100%;aspect-ratio:3/4;max-height:58vh;border-radius:12px;
+         overflow:hidden;background:#000;margin-top:12px;display:none}
+  .stageInner{position:absolute;left:0;top:0;width:100%;height:100%}
+  .stageInner video{width:100%;height:100%;display:block;object-fit:fill}
+  .stageInner canvas{position:absolute;left:0;top:0;width:100%;height:100%}
   .recdot{position:absolute;top:10px;left:10px;display:none;align-items:center;gap:6px;
     background:rgba(0,0,0,.5);padding:5px 10px;border-radius:99px;font-size:12px;font-weight:700}
   .recdot i{width:9px;height:9px;border-radius:50%;background:#ff3b3b;animation:bl 1s infinite}
@@ -74,11 +77,10 @@
   summary{cursor:pointer;color:var(--sub);font-size:13px}
   details ul{margin:8px 0 0;padding-left:18px;color:var(--sub);font-size:12.5px}
   details li{margin:3px 0}
+  .replay{margin-top:12px}
+  .replayCap{font-size:12px;color:var(--sub);text-align:center;margin:8px 0 0}
+  .btn-ghost.active{background:var(--accent);color:#1a1205;border-color:var(--accent)}
   .hide{display:none!important}
-  .modelrow{display:flex;gap:9px;align-items:flex-start;margin-top:12px;background:var(--card2);
-    border-radius:10px;padding:11px 12px;font-size:12.5px;color:var(--sub);cursor:pointer}
-  .modelrow input{margin-top:2px;accent-color:var(--accent)}
-  .modelrow b{color:var(--txt)}
 </style>
 </head>
 <body>
@@ -89,22 +91,43 @@
 
 <div class="wrap">
 
-  <!-- 1) 입력 -->
+  <!-- 1) 입력 (⚠ #stage는 절대 DOM 이동시키지 않는다 — 재부착 시 Safari 등에서 재생이 죽는다) -->
   <div class="card" id="inputCard">
-    <div class="row">
-      <button class="btn btn-rec" id="camBtn">📹 카메라로 촬영</button>
-      <label class="file">
-        <input type="file" id="filePick" accept="video/*" />
-        <span class="btn btn-ghost">🖼️ 영상 불러오기</span>
+    <div id="inputTop">
+      <div class="row">
+        <button class="btn btn-rec" id="camBtn">📹 카메라로 촬영</button>
+        <label class="file">
+          <input type="file" id="filePick" accept="video/*" />
+          <span class="btn btn-ghost">🖼️ 영상 불러오기</span>
+        </label>
+      </div>
+      <!-- 폰 카메라 앱을 직접 여는 폴백. 브라우저 내장 카메라(getUserMedia)가 막혀도 동작한다 -->
+      <label class="file" style="margin-top:10px">
+        <input type="file" id="camFallback" accept="video/*" capture="environment" />
+        <span class="btn btn-ghost" id="camFallbackLabel">📱 폰 카메라 앱으로 촬영</span>
       </label>
     </div>
 
     <div class="stage" id="stage">
-      <video id="video" playsinline muted></video>
-      <canvas id="liveCanvas"></canvas>
+      <div class="stageInner" id="stageInner">
+        <video id="video" playsinline muted preload="auto" webkit-playsinline></video>
+        <canvas id="liveCanvas"></canvas>
+      </div>
       <div class="recdot" id="recDot"><i></i> 녹화 중</div>
     </div>
 
+    <!-- 결과 화면에서 이 자리에 재생 버튼이 나타난다(영상은 위 stage 그대로 사용) -->
+    <div class="replay hide" id="replayBar">
+      <div class="row">
+        <button class="btn btn-ghost" id="playNormalBtn">▶ 정상 속도</button>
+        <button class="btn btn-ghost" id="playSlowBtn">🐢 슬로우 모션</button>
+      </div>
+      <p class="replayCap" id="replayCap"></p>
+    </div>
+
+    <p class="err" id="err"></p>
+
+    <div id="inputControls">
     <button class="btn btn-rec hide" id="recBtn" style="margin-top:12px">● 녹화 시작</button>
     <button class="btn btn-primary hide" id="analyzeBtn" style="margin-top:12px">자세 분석 시작</button>
 
@@ -112,19 +135,13 @@
       <div class="bar"><i id="barFill"></i></div>
       <p id="progressTxt">분석 준비 중…</p>
     </div>
-    <p class="err" id="err"></p>
-
-    <label class="modelrow">
-      <input type="checkbox" id="preciseChk" />
-      <span><b>정밀 모드</b> — 무거운 AI 모델 사용. 더 정밀하지만 스마트폰에서는 느리고 프레임을 놓칠 수 있어요. 컴퓨터에서 권장.</span>
-    </label>
-
     <div class="hint">
       <b>정확한 분석을 위한 촬영 팁 (중요)</b><br>
       • 반드시 <b>옆(측면)</b>에서 촬영 — 정면은 각도가 왜곡돼 점수가 부정확합니다<br>
       • <b>한 번의 슛 동작만</b> 담긴 짧은 영상(2~5초). 드리블·이동이 섞이면 정확도가 떨어집니다<br>
       • 몸이 화면에 <b>크게</b> 들어오도록 가까이서, 밝은 곳에서 촬영
     </div>
+    </div><!-- /inputControls -->
   </div>
 
   <!-- 2) 결과 -->
@@ -137,6 +154,7 @@
       <div class="grade" id="grade"></div>
     </div>
     <div class="quality" id="quality"></div>
+
     <div class="frames">
       <figure><canvas id="setCanvas" width="240" height="300"></canvas><figcaption>셋업(준비) 순간</figcaption></figure>
       <figure><canvas id="relCanvas" width="240" height="300"></canvas><figcaption>릴리스(공 놓는) 순간</figcaption></figure>
@@ -163,43 +181,79 @@
 
 </div>
 
+<!-- ⚠ 아래 모듈은 https CDN에서 AI 엔진을 불러온다. 실패하면 모듈 본문이 통째로 실행되지 않아
+     버튼이 하나도 동작하지 않는다("아무 반응 없음"). 그 경우를 사용자에게 알리는 안전망. 되돌리지 말 것. -->
+<script>
+  window.__ready = false;
+  function bootFail(why){
+    if (window.__ready) return;
+    var el = document.getElementById('err');
+    if (!el) return;
+    el.textContent = '⚠️ AI 엔진을 불러오지 못했습니다. 인터넷 연결이 필요합니다. '
+      + '연결을 확인하고 새로고침해 주세요. (' + why + ')';
+    el.style.display = 'block';
+  }
+  window.addEventListener('error', function(e){
+    if (e && e.target && e.target.tagName === 'SCRIPT') bootFail('스크립트 로드 실패');
+  }, true);
+  setTimeout(function(){ bootFail('시간 초과 — 인터넷 연결 확인'); }, 12000);
+</script>
 <script type="module">
 import { FilesetResolver, PoseLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 
+window.__ready = true;   // 모듈이 정상 실행됨(부트 실패 안내 해제)
 const $ = id => document.getElementById(id);
+// PC에서는 capture 속성이 무시되어 그냥 파일 선택창이 뜬다 → 라벨을 정직하게 바꾼다
+if(!/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)){
+  const lb=document.getElementById('camFallbackLabel');
+  if(lb) lb.textContent='📁 영상 파일 선택 (휴대폰에서는 카메라 앱 실행)';
+}
 const video=$('video'), stage=$('stage'), liveCanvas=$('liveCanvas'), lctx=liveCanvas.getContext('2d');
 const analyzeBtn=$('analyzeBtn'), progress=$('progress'), barFill=$('barFill'), progressTxt=$('progressTxt');
 const err=$('err'), inputCard=$('inputCard'), resultCard=$('resultCard');
 const camBtn=$('camBtn'), recBtn=$('recBtn'), recDot=$('recDot');
 
-let poseLandmarker=null, modelReady=null, loadedModel=null;
+let poseLandmarker=null, modelReady=null;
 let camStream=null, recorder=null, recChunks=[], usingCamera=false;
+let tsCursor=0;            // 분석 간 누적 타임스탬프(절대 되돌아가지 않음)
+let lastDetectError=null;  // 추론 예외 기록(자동 복구용)
+let objUrl=null;           // 이전 영상 URL(메모리 누수 방지용 해제 대상)
+let runToken=0;            // 분석 "세대" — 옛 프레임 콜백(좀비) 차단용
 
-// ---------- 모델 선택: 모바일=full(빠름·프레임 누락 적음), 컴퓨터=heavy(정밀) ----------
-const MODEL_FULL ="https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
-const MODEL_HEAVY="https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task";
-const isMobile = /Android|iPhone|iPod/i.test(navigator.userAgent)
-  || (navigator.maxTouchPoints>2 && /Mac|iPad/.test(navigator.userAgent));
-const preciseChk=$('preciseChk');
-preciseChk.checked = !isMobile;   // 컴퓨터는 기본 정밀 모드
+// 이전 분석의 프레임 루프·타이머·비트맵을 완전히 정리한다.
+// ⚠ rVFC는 src 변경·load()로 취소되지 않는다. 반드시 cancelVideoFrameCallback로 끊어야 한다.
+//   (옛 방식: 취소 없이 방치 → 2회차 분석에서 옛 콜백이 부활해 추론 2배 중복 → 재분석 실패. 되돌리지 말 것)
+// 진행 중인 분석을 무효화한다. 샘플링 루프는 매 프레임 myRun!==runToken을 확인해 즉시 중단된다.
+function cancelFrameLoop(){ runToken++; }
+function releaseFrames(list){
+  for(const f of (list||[])){ if(f && f.bmp){ try{ f.bmp.close(); }catch(_){} f.bmp=null; } }
+}
 
+// ---------- 모델 로드 (정확도 높은 FULL 모델 사용) ----------
+// ⚠ 실패한 Promise를 캐시하면 그 세션은 영구 실패한다(새로고침 전까지 복구 불가).
+//   반드시 실패 시 modelReady를 비워 다음 시도에서 재로드되게 한다. 되돌리지 말 것.
 async function loadModel(){
-  const want = preciseChk.checked ? MODEL_HEAVY : MODEL_FULL;
-  if(modelReady && loadedModel===want) return modelReady;
-  loadedModel=want;
+  if(modelReady) return modelReady;
   modelReady=(async()=>{
     const vision=await FilesetResolver.forVisionTasks(
       "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
     poseLandmarker=await PoseLandmarker.createFromOptions(vision,{
       baseOptions:{
-        modelAssetPath: want,
+        // full = 정확도/속도 균형점. heavy는 프레임당 추론이 너무 느려 샘플링이 부족해진다.
+        modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",
         delegate:"GPU"
       },
       runningMode:"VIDEO", numPoses:1,
       minPoseDetectionConfidence:0.4, minPosePresenceConfidence:0.4, minTrackingConfidence:0.4
     });
-  })();
+  })().catch(e=>{ modelReady=null; poseLandmarker=null; throw e; });  // 실패는 캐시하지 않는다
   return modelReady;
+}
+// 모델을 완전히 새로 만든다(=새로고침과 동일 효과). 추론 실패 시 자동 복구용.
+async function resetModel(){
+  try{ if(poseLandmarker) poseLandmarker.close(); }catch(_){}
+  poseLandmarker=null; modelReady=null; tsCursor=0; lastDetectError=null;
+  await loadModel();
 }
 
 // ---------- 카메라 촬영 ----------
@@ -207,6 +261,18 @@ camBtn.addEventListener('click', async ()=>{
   err.style.display='none';
   try{
     if(usingCamera){ stopCamera(); return; }
+    // 보안 컨텍스트가 아니거나(파일을 그냥 연 경우) API 자체가 없으면 즉시 폴백 안내
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      showErr('이 브라우저에서는 화면 내 카메라를 쓸 수 없습니다(https가 아니거나 미지원). '
+            + '아래 “📱 폰 카메라 앱으로 촬영” 버튼을 사용해 주세요.');
+      return;
+    }
+    cancelFrameLoop();                                  // 좀비 프레임 루프 차단
+    setResultMode(false); replayFrames=null; applyCrop(null);
+    videoGen++;                                         // 이전 영상 준비 대기 무효화
+    resultCard.classList.add('hide');
+    if(objUrl){ try{ URL.revokeObjectURL(objUrl); }catch(_){} objUrl=null; }
+    video.removeAttribute('src');
     camStream=await navigator.mediaDevices.getUserMedia({
       video:{ facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720} }, audio:false });
     video.srcObject=camStream; video.muted=true; await video.play();
@@ -214,12 +280,25 @@ camBtn.addEventListener('click', async ()=>{
     liveCanvas.width=video.videoWidth||720; liveCanvas.height=video.videoHeight||1280;
     usingCamera=true; camBtn.textContent='✕ 카메라 끄기';
     recBtn.classList.remove('hide'); analyzeBtn.classList.add('hide');
-  }catch(ex){ showErr('카메라를 열 수 없습니다. 브라우저 카메라 권한을 허용했는지 확인해 주세요. (' + (ex.message||ex) + ')'); }
+  }catch(ex){
+    const n=ex && ex.name;
+    let msg='카메라를 열 수 없습니다. ';
+    if(!window.isSecureContext) msg+='이 페이지가 https가 아니라 브라우저가 카메라를 막았습니다. https 주소로 접속해 주세요. ';
+    else if(n==='NotAllowedError') msg+='카메라 권한이 거부되었습니다. 주소창의 자물쇠 아이콘에서 카메라를 허용해 주세요. ';
+    else if(n==='NotFoundError') msg+='사용 가능한 카메라를 찾지 못했습니다. ';
+    else if(n==='NotReadableError') msg+='다른 앱이 카메라를 사용 중입니다. 그 앱을 닫고 다시 시도해 주세요. ';
+    msg+='→ 아래 “📱 폰 카메라 앱으로 촬영” 버튼을 대신 사용해 주세요. (' + (n||'') + ')';
+    showErr(msg);
+    $('inputTop').classList.remove('hide');
+  }
 });
 function stopCamera(){
+  // 녹화 중 카메라를 끄면 recorder가 자동 종료되며 onstop이 녹화본을 로드해버린다 → 먼저 콜백을 끊는다
+  if(recorder && recorder.state==='recording'){ recorder.onstop=null; try{ recorder.stop(); }catch(_){} recorder=null; }
   if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; }
-  video.srcObject=null; usingCamera=false; camBtn.textContent='📹 카메라로 촬영';
-  recBtn.classList.add('hide'); recDot.style.display='none';
+  if(video.srcObject) video.srcObject=null;
+  usingCamera=false; camBtn.textContent='📹 카메라로 촬영';
+  recBtn.classList.add('hide'); recBtn.textContent='● 녹화 시작'; recDot.style.display='none';
 }
 recBtn.addEventListener('click', ()=>{
   if(recorder && recorder.state==='recording'){ recorder.stop(); return; }
@@ -232,9 +311,10 @@ recBtn.addEventListener('click', ()=>{
   recorder.onstop=()=>{
     const blob=new Blob(recChunks,{type:recChunks[0]?recChunks[0].type:'video/webm'});
     stopCamera();
-    const url=URL.createObjectURL(blob);
-    video.srcObject=null; video.src=url; video.muted=true;
-    video.onloadeddata=()=>{ analyzeBtn.classList.remove('hide'); };
+    if(objUrl){ try{ URL.revokeObjectURL(objUrl); }catch(_){} }
+    objUrl=URL.createObjectURL(blob);
+    video.srcObject=null; video.src=objUrl; video.muted=true;
+    waitVideoReady();
     recDot.style.display='none'; recBtn.classList.add('hide');
   };
   recorder.start();
@@ -243,100 +323,313 @@ recBtn.addEventListener('click', ()=>{
 });
 
 // ---------- 파일 불러오기 ----------
-$('filePick').addEventListener('change', e=>{
+$('camFallback').addEventListener('change', e=>onPickVideo(e));
+$('filePick').addEventListener('change', e=>onPickVideo(e));
+function onPickVideo(e){
   const f=e.target.files&&e.target.files[0]; if(!f) return;
-  err.style.display='none'; stopCamera();
-  video.srcObject=null; video.src=URL.createObjectURL(f); video.muted=true;
-  video.onloadeddata=()=>{
-    stage.style.display='block';
-    liveCanvas.width=video.videoWidth; liveCanvas.height=video.videoHeight;
-    analyzeBtn.classList.remove('hide'); recBtn.classList.add('hide');
-    try{ video.currentTime=0; }catch(_){}
-  };
-});
+  cancelFrameLoop();                                    // 좀비 프레임 루프 차단
+  setResultMode(false); replayFrames=null; applyCrop(null);
+  // 녹화 중이었다면 onstop이 나중에 발화해 방금 고른 파일을 덮어쓰는 것을 방지
+  if(recorder && recorder.state==='recording'){ recorder.onstop=null; try{ recorder.stop(); }catch(_){} recorder=null; }
+  err.style.display='none'; progress.style.display='none'; barFill.style.width='0%';
+  videoGen++; if(usingCamera||camStream) stopCamera();
+  resultCard.classList.add('hide');
+  if(objUrl){ try{ URL.revokeObjectURL(objUrl); }catch(_){} }
+  objUrl=URL.createObjectURL(f);
+  video.srcObject=null; video.src=objUrl; video.muted=true;
+  waitVideoReady();
+}
 
 $('againBtn').addEventListener('click', ()=>{
-  resultCard.classList.add('hide'); inputCard.classList.remove('hide');
+  cancelFrameLoop();                                   // 좀비 프레임 루프 차단
+  setResultMode(false); replayFrames=null; applyCrop(null);   // 입력 모드 복귀
+  resultCard.classList.add('hide');
   analyzeBtn.classList.add('hide'); recBtn.classList.add('hide');
   stage.style.display='none'; progress.style.display='none';
-  $('filePick').value=''; video.removeAttribute('src'); video.srcObject=null; video.load();
+  err.style.display='none'; barFill.style.width='0%';   // 이전 에러·진행바 잔상 제거
+  videoGen++;                                           // 이전 영상 준비 대기 무효화
+  $('filePick').value=''; $('camFallback').value='';
+  if(objUrl){ try{ URL.revokeObjectURL(objUrl); }catch(_){} objUrl=null; }
+  video.removeAttribute('src'); video.srcObject=null; video.load();
 });
 
 function showErr(m){ err.textContent='⚠️ '+m; err.style.display='block'; }
 
+// ⚠ iOS 사파리는 preload 제한으로 'loadeddata'가 안 오는 경우가 많다.
+//   그러면 "분석 시작" 버튼이 영영 안 뜬다(= 휴대폰에서 영상 붙여도 반응 없음).
+//   → loadedmetadata·loadeddata·canplay 중 먼저 오는 것을 받고, 그래도 안 오면 타임아웃 폴백. 되돌리지 말 것.
+let videoGen=0;
+function onVideoReady(){
+  stage.style.display='block';
+  liveCanvas.width=video.videoWidth||720;
+  liveCanvas.height=video.videoHeight||1280;
+  applyCrop(null);
+  analyzeBtn.classList.remove('hide');
+  recBtn.classList.add('hide');
+}
+function waitVideoReady(){
+  const my=++videoGen;
+  let fired=false;
+  const go=()=>{
+    if(fired || my!==videoGen) return;
+    fired=true; cleanup(); onVideoReady();
+  };
+  const cleanup=()=>{
+    video.removeEventListener('loadedmetadata',go);
+    video.removeEventListener('loadeddata',go);
+    video.removeEventListener('canplay',go);
+  };
+  video.addEventListener('loadedmetadata',go);
+  video.addEventListener('loadeddata',go);
+  video.addEventListener('canplay',go);
+  try{ video.load(); }catch(_){}
+  setTimeout(()=>{ if(!fired && my===videoGen) go(); }, 2500);   // 폴백: 그래도 버튼은 띄운다
+}
+
+// ================= 슛 구간 다시보기 (정상 속도 / 슬로우 모션) =================
+// stage(video+오버레이 캔버스)를 결과 화면으로 옮겨 재생하고, 저장된 관절로 골격선을 겹쳐 그린다.
+// ⚠ video 요소를 DOM에서 옮기지 않는다(재부착하면 Safari 등에서 재생이 죽는다).
+//   대신 같은 자리의 stage를 그대로 쓰고, 재생 버튼 바(#replayBar)만 보였다 숨긴다. 되돌리지 말 것.
+let replayFrames=null, replayStart=0, replayEnd=0, replayRAF=null, replayEpoch=0;
+
+function stopReplay(){
+  replayEpoch++;                       // 진행 중이던 재생(await 중인 것 포함)을 무효화
+  if(replayRAF!=null){ cancelAnimationFrame(replayRAF); replayRAF=null; }
+  try{ video.pause(); }catch(_){}
+  video.playbackRate=1;
+  $('playNormalBtn').classList.remove('active');
+  $('playSlowBtn').classList.remove('active');
+}
+// 결과 모드: 입력 컨트롤 숨기고 재생 바 표시 / 입력 모드: 그 반대 (영상은 제자리 유지)
+function setResultMode(on){
+  stopReplay();
+  $('replayBar').classList.toggle('hide', !on);
+  $('inputTop').classList.toggle('hide', on);
+  $('inputControls').classList.toggle('hide', on);
+}
+// 재생 시각에 가장 가까운 프레임의 골격을 오버레이
+function drawOverlayAt(t){
+  if(!replayFrames||!replayFrames.length) return;
+  let best=null, bd=1e9;
+  for(const f of replayFrames){ const d=Math.abs(f.t-t); if(d<bd){ bd=d; best=f; } }
+  const w=liveCanvas.width, h=liveCanvas.height;
+  if(best && bd<=0.2) drawSkeleton(lctx, best.lm, w, h, true);
+  else lctx.clearRect(0,0,w,h);
+}
+async function playReplay(rate, btn){
+  if(!replayFrames) return;
+  const wasActive=btn.classList.contains('active');
+  stopReplay();                             // (내부에서 replayEpoch++)
+  if(wasActive) return;                     // 재생 중 같은 버튼 → 정지
+  const my=replayEpoch;                     // 이번 재생의 세대
+  btn.classList.add('active');
+  video.playbackRate=rate;
+  video.muted=true;
+  await seekTo(replayStart);
+  if(my!==replayEpoch) return;              // await 중 취소됨 → 중단(옛 버그: 정지가 안 먹힘)
+  // ⚠ video.play()는 디코더 스톨·시크 미완료 시 resolve도 reject도 안 하고 영원히 멈출 수 있다.
+  //   그러면 rAF 루프가 시작되지 않아 "버튼이 안 먹는" 증상이 된다. 반드시 타임아웃을 건다. 되돌리지 말 것.
+  let playOk=false;
+  try{
+    await Promise.race([
+      video.play().then(()=>{ playOk=true; }),
+      new Promise(r=>setTimeout(r,3000))
+    ]);
+  }catch(ex){
+    if(my===replayEpoch){ stopReplay(); showErr('다시보기를 재생할 수 없습니다: '+(ex.message||ex)); }
+    return;
+  }
+  if(my!==replayEpoch){ try{ video.pause(); }catch(_){} return; }
+  if(!playOk && video.paused){
+    stopReplay();
+    showErr('이 영상은 브라우저가 재생하지 못했습니다. (mp4로 변환하면 대개 해결됩니다)');
+    return;
+  }
+  if(my!==replayEpoch){ try{ video.pause(); }catch(_){} return; }
+  const t0=performance.now();
+  const loop=()=>{
+    if(my!==replayEpoch) return;            // 무효화된 루프는 스스로 종료
+    const t=video.currentTime;
+    drawOverlayAt(t);
+    if(video.ended || t>=replayEnd){ stopReplay(); drawOverlayAt(replayEnd); return; }
+    // 재생 시작 직후 한두 틱은 paused로 보고될 수 있어 300ms 유예 후에만 정지 판정
+    if(video.paused && performance.now()-t0>300){ stopReplay(); return; }
+    replayRAF=requestAnimationFrame(loop);
+  };
+  replayRAF=requestAnimationFrame(loop);
+}
+$('playNormalBtn').addEventListener('click', ()=>playReplay(1, $('playNormalBtn')));
+$('playSlowBtn').addEventListener('click', ()=>playReplay(0.25, $('playSlowBtn')));
+
+// 영상 디코딩 실패를 사용자에게 알림(무한 정지 방지)
+video.addEventListener('error', ()=>{
+  if(video.srcObject) return;             // 카메라 스트림은 대상 아님
+  if(!video.getAttribute('src')) return;  // 리셋 중 발생하는 빈 src는 무시
+  cancelFrameLoop();
+  analyzeBtn.classList.add('hide'); progress.style.display='none';
+  showErr('이 영상 파일을 재생할 수 없습니다(코덱 미지원 등). 다른 영상으로 시도하거나 mp4로 변환해 주세요.');
+});
+
 // ---------- 분석 시작 ----------
 analyzeBtn.addEventListener('click', async ()=>{
+  let frames=[];                    // finally에서 반드시 해제(예외 경로 포함)
+  setInputsLocked(true);
   try{
-    analyzeBtn.disabled=true; err.style.display='none';
+    err.style.display='none';
     progress.style.display='block'; barFill.style.width='3%';
     progressTxt.textContent='AI 모델 불러오는 중… (첫 실행은 수 초 걸려요)';
+    lastDetectError=null;
     await loadModel();
 
-    const frames=await sampleFrames();   // [{t,lm,bmp}]
+    frames=await sampleFrames();   // [{t,lm,bmp}]
+
+    // 자동 복구: 추론이 실패해 프레임을 못 얻으면 모델을 새로 만들어 1회 재시도
+    // (새로고침 없이도 연속 분석이 되도록 보장)
+    if(frames.length<5 && lastDetectError){
+      progressTxt.textContent='분석 엔진 재시작 중…';
+      releaseFrames(frames); frames=[];
+      await resetModel();
+      frames=await sampleFrames();
+    }
+
     if(frames.length<5){
       throw new Error('사람의 자세를 충분히 인식하지 못했습니다. 몸이 더 크게 보이도록 가까이서, 측면으로 다시 촬영해 주세요.');
     }
     progressTxt.textContent='자세 계산 중…';
     const report=analyzeShot(frames);
-    await renderReport(report, frames);
+    await renderReport(report, frames);      // 필요한 2장은 여기서 캔버스로 복사됨(동기)
 
-    inputCard.classList.add('hide'); resultCard.classList.remove('hide');
+    // 다시보기 준비: 셋업~릴리스 직후 구간(관절 좌표만 보관 — 비트맵은 아래 finally에서 해제)
+    replayFrames=frames.map(f=>({t:f.t, lm:f.lm}));
+    const relT=frames[report.relIdx].t, setT=frames[report.setIdx].t;
+    const vdur=(isFinite(video.duration)&&video.duration>0)?video.duration:relT+1;
+    replayStart=Math.max(0, Math.min(setT, relT-1.0) - 0.3);
+    replayEnd=Math.min(vdur, relT+1.0);
+    $('replayCap').textContent=`슛 구간(${replayStart.toFixed(1)}~${replayEnd.toFixed(1)}초)을 골격선과 함께 다시 봅니다.`;
+    // 슛 구간(셋업~릴리스 직후) 기준으로 최종 확대 영역 확정 → 다시보기도 사람이 중앙에 크게
+    const shotFrames=frames.filter(f=> f.t>=replayStart && f.t<=replayEnd);
+    const shotBox=bboxOfFrames(shotFrames.length?shotFrames:frames);
+    applyCrop(shotBox);
+
+    setResultMode(true); stage.style.display='block';
+    await seekTo(replayStart);          // 영상 위치와 골격을 같은 시각으로 맞춘다(어긋남 방지)
+    drawOverlayAt(replayStart);
+
+    resultCard.classList.remove('hide');
     window.scrollTo({top:0,behavior:'smooth'});
-  }catch(ex){ showErr(ex.message||ex); }
-  finally{ analyzeBtn.disabled=false; progress.style.display='none'; }
+  }catch(ex){
+    setResultMode(false);                 // 입력 컨트롤 복구(새로고침 없이 탈출 가능하게)
+    resultCard.classList.add('hide');
+    showErr(ex.message||ex);
+  }
+  finally{
+    releaseFrames(frames);          // 성공·실패·예외 모든 경로에서 비트맵 해제
+    setInputsLocked(false);
+    progress.style.display='none';
+    $('filePick').value=''; $('camFallback').value='';  // 같은 파일 재선택도 change가 발화하도록
+  }
 });
 
-// 영상을 재생하며 프레임 추출 (재생 기반 = 촬영본·업로드본 모두 안정적으로 동작)
-async function sampleFrames(){
-  const frames=[]; let lastTs=-1;
-  video.muted=true; video.playbackRate=1;
-  try{ video.currentTime=0; }catch(_){}
-  const dur=(isFinite(video.duration)&&video.duration>0)?video.duration:0;
+// 분석 중에는 입력 버튼을 잠근다(분석 도중 카메라/파일 전환 → 취소 사고 구조적 차단)
+function setInputsLocked(lock){
+  analyzeBtn.disabled=lock; camBtn.disabled=lock; recBtn.disabled=lock;
+  $('filePick').disabled=lock; $('camFallback').disabled=lock;
+}
 
-  // requestVideoFrameCallback 지원 시 사용, 아니면 seek 방식
-  if('requestVideoFrameCallback' in HTMLVideoElement.prototype){
-    await video.play().catch(()=>{});
-    await new Promise(resolve=>{
-      let done=false;
-      const finish=()=>{ if(done)return; done=true; resolve(); };
-      const onFrame=async (now, meta)=>{
-        const t=meta.mediaTime;
-        let ts=Math.round(t*1000); if(ts<=lastTs) ts=lastTs+1; lastTs=ts;
-        let res=null; try{ res=poseLandmarker.detectForVideo(video, ts); }catch(_){}
-        if(res&&res.landmarks&&res.landmarks.length){
-          const lm=res.landmarks[0];
-          let bmp=null; try{ bmp=await createImageBitmap(video,{resizeWidth:360,resizeQuality:'low'}); }catch(_){}
-          frames.push({t, lm, bmp});
-          drawSkeleton(lctx, lm, liveCanvas.width, liveCanvas.height, true);
-        }
-        if(dur){ const p=Math.min(99,Math.round((t/dur)*100)); barFill.style.width=Math.max(3,p)+'%'; progressTxt.textContent=`자세 추출 중… ${p}%`; }
-        else { progressTxt.textContent=`자세 추출 중… ${frames.length}프레임`; }
-        if(video.ended||video.paused) finish(); else video.requestVideoFrameCallback(onFrame);
-      };
-      video.addEventListener('ended', finish, {once:true});
-      video.requestVideoFrameCallback(onFrame);
-      setTimeout(finish, 20000); // 안전장치
-    });
-    video.pause();
-  } else {
-    // 폴백: seek 방식
-    const d=dur||1; const step=Math.max(0.04,d/100);
-    for(let t=0;t<d;t+=step){
-      await seekTo(t);
-      let ts=Math.round(t*1000); if(ts<=lastTs)ts=lastTs+1; lastTs=ts;
-      let res=null; try{ res=poseLandmarker.detectForVideo(video,ts); }catch(_){}
-      if(res&&res.landmarks&&res.landmarks.length){
-        const lm=res.landmarks[0]; let bmp=null;
-        try{ bmp=await createImageBitmap(video,{resizeWidth:360,resizeQuality:'low'}); }catch(_){}
-        frames.push({t,lm,bmp});
-        drawSkeleton(lctx,lm,liveCanvas.width,liveCanvas.height,true);
-      }
-      const p=Math.round((t/d)*100); barFill.style.width=Math.max(3,p)+'%'; progressTxt.textContent=`자세 추출 중… ${p}%`;
+// 영상을 재생하며 프레임 추출 (재생 기반 = 촬영본·업로드본 모두 안정적으로 동작)
+// ⚠ 중요: MediaPipe VIDEO 모드는 타임스탬프가 landmarker 수명 동안 "계속 증가"해야 한다.
+//   두 번째 영상은 0초부터 다시 시작하므로 tsCursor(전역 누적)로 항상 증가시킨다.
+//   (옛 방식: 분석마다 lastTs=-1 초기화 → 2번째 분석에서 detectForVideo 예외 → 재분석 불가 버그. 되돌리지 말 것)
+// ⚠ 반드시 seek(한 칸씩 멈춰가며) 방식으로 샘플링한다.
+//   옛 방식(영상을 실제 재생하며 requestVideoFrameCallback으로 수집)은 재생이 실시간으로 흘러가는데
+//   추론이 그보다 느리면 프레임을 대량으로 놓쳐 "자세 인식 실패"가 났다(2026 회귀 사고). 되돌리지 말 것.
+async function sampleFrames(){
+  cancelFrameLoop();                      // 이전 분석의 좀비 루프 제거
+  const myRun = runToken;                 // 이번 분석의 세대 번호
+  const frames=[]; let detErr=null;
+  const base = tsCursor + 1000;           // 이번 분석의 타임스탬프 시작점(전역 단조증가)
+  const nextTs = t => { let ts=base+Math.round(t*1000); if(ts<=tsCursor) ts=tsCursor+1; tsCursor=ts; return ts; };
+
+  video.muted=true; video.playbackRate=1;
+  try{ video.pause(); }catch(_){}
+
+  const dur=await ensureDuration();       // 녹화본(webm)의 duration=Infinity 문제까지 해결
+  if(!dur){ throw new Error('영상 길이를 읽지 못했습니다. 다른 영상으로 시도해 주세요.'); }
+
+  // 추론 속도와 무관하게 항상 일정 개수를 확보한다(≈12fps, 최대 70장)
+  const target=Math.max(20, Math.min(70, Math.ceil(dur*12)));
+  const step=dur/target;
+  const deadline=Date.now()+120000;       // 전체 데드라인(무한정지 방지)
+
+  // 화면 표시를 "영상의 실제 속도"에 맞춘다.
+  // 추출은 seek 방식(정확) 그대로 두되, 각 프레임을 원래 시각(t초)이 될 때까지 기다렸다 넘어간다.
+  // → 빨리 감기처럼 보이지 않는다. 추론이 느린 기기에서는 느려질 뿐, 절대 빨라지지 않는다.
+  const wallStart=performance.now();
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+  for(let i=0;i<target;i++){
+    if(myRun!==runToken || Date.now()>deadline) break;   // 취소되면 즉시 중단
+    const t=Math.min(dur-0.01, i*step);
+    await seekTo(t);
+    if(myRun!==runToken) break;
+    const ts=nextTs(t);
+    let res=null; try{ res=poseLandmarker.detectForVideo(video, ts); }catch(e){ detErr=e; }
+    if(res&&res.landmarks&&res.landmarks.length){
+      const lm=res.landmarks[0];
+      let bmp=null; try{ bmp=await createImageBitmap(video,{resizeWidth:360,resizeQuality:'low'}); }catch(_){}
+      if(myRun!==runToken){ if(bmp){ try{bmp.close();}catch(_){} } break; }
+      frames.push({t, lm, bmp});
+      drawSkeleton(lctx, lm, liveCanvas.width, liveCanvas.height, true);
     }
+    // 사람이 몇 장 잡히면 그 위치로 화면을 확대·중앙 정렬(배경 최소화)
+    if(frames.length===3 || (frames.length>3 && frames.length%10===0)){
+      const b=bboxOfFrames(frames); if(b) applyCrop(b);
+    }
+    const p=Math.round(((i+1)/target)*100);
+    barFill.style.width=Math.max(3,p)+'%';
+    progressTxt.textContent=`자세 추출 중… ${p}%  (인식 ${frames.length}장)`;
+
+    // 실제 경과시간이 영상 시각(t)을 따라잡을 때까지 대기 = 정상 속도 재생처럼 보이게
+    const behind = (t*1000) - (performance.now()-wallStart);
+    if(behind > 0) await sleep(Math.min(behind, 1000));
+    if(myRun!==runToken) break;
   }
+  try{ video.currentTime=0; }catch(_){}
+  if(frames.length<5 && detErr) lastDetectError=detErr;   // 자동복구 조건(<5)과 일치시킨다
   return frames;
 }
-function seekTo(t){ return new Promise(res=>{ const on=()=>{video.removeEventListener('seeked',on);res();}; video.addEventListener('seeked',on); try{video.currentTime=t;}catch(_){res();} }); }
+
+// duration을 확실히 얻는다. 카메라 녹화본(webm)은 duration=Infinity로 오는 경우가 많다.
+async function ensureDuration(){
+  if(isFinite(video.duration) && video.duration>0) return video.duration;
+  return await new Promise(resolve=>{
+    let fin=false;
+    const done=v=>{ if(fin)return; fin=true; video.removeEventListener('durationchange', onDur);
+                    try{ video.currentTime=0; }catch(_){} resolve(v); };
+    const onDur=()=>{ if(isFinite(video.duration)&&video.duration>0) done(video.duration); };
+    video.addEventListener('durationchange', onDur);
+    try{ video.currentTime=1e7; }catch(_){}       // 끝으로 보내면 실제 duration이 확정된다
+    setTimeout(()=>done(isFinite(video.duration)&&video.duration>0?video.duration:0), 3000);
+  });
+}
+// seeked 이벤트가 안 오는 영상(디코딩 문제 등)에서 영구 정지하지 않도록 1.5초 타임아웃
+async function seekTo(t){
+  await seekOnce(t);
+  // 시크가 오래 걸려 조기 반환됐다면 한 번 더 기다린다(미완료 시크 중 play() 호출 방지)
+  if(Math.abs(video.currentTime-t)>0.15) await seekOnce(t);
+}
+function seekOnce(t){
+  return new Promise(res=>{
+    // 이미 그 위치면 seeked가 안 올 수 있다 → 즉시 반환(1.5초 먹통 방지)
+    if(!video.seeking && Math.abs(video.currentTime-t)<0.02) return res();
+    let fin=false;
+    const done=()=>{ if(fin)return; fin=true; video.removeEventListener('seeked',on); res(); };
+    const on=()=>done();
+    video.addEventListener('seeked',on);
+    try{ video.currentTime=t; }catch(_){ done(); return; }
+    setTimeout(done, 1500);
+  });
+}
 
 // ---------- 기하 ----------
 const L={ nose:0,lSh:11,rSh:12,lEl:13,rEl:14,lWr:15,rWr:16,lIdx:19,rIdx:20,lHip:23,rHip:24,lKnee:25,rKnee:26,lAnk:27,rAnk:28 };
@@ -386,7 +679,7 @@ function analyzeShot(frames){
     if(!okv(f,[S,E,W],0.3)) continue;
     if(f[W].y < f[S].y+0.18){ const a=angle(f[S],f[E],f[W]); if(a>=50&&a<=150&&a<setBend){ setBend=a; setI=i; } }
   }
-  if(setI<0){ // 폴백: 릴리스 직전 신뢰도 있는 프레임
+  if(setI<0 && relI>0){ // 폴백: 릴리스 직전 신뢰도 있는 프레임
     for(let i=relI-1;i>=0;i--){ if(okv(frames[i].lm,[S,E,W],0.3)){ setI=i; break; } }
     if(setI<0) setI=Math.max(0,relI-1);
   }
@@ -494,6 +787,57 @@ function mSnap(s){ const pts=s>0.02?100:s>-0.01?70:50; let msg,fix;
   else { msg='폴로스루(손목 스냅)가 약해 보입니다.'; fix='공을 놓은 뒤 손목을 아래로 부드럽게 꺾어 회전을 주세요.'; }
   return { name:'폴로스루(참고)', ok:true, pts, val:s>0?'스냅 있음':'약함', msg, fix }; }
 
+// ---------- 사람 자동 확대·중앙 정렬 (크롭) ----------
+// 관절 좌표로 사람의 바운딩 박스를 구해, 그 부분만 확대해 화면 중앙에 놓는다.
+// (배경이 화면을 잡아먹고 사람이 가장자리에서 잘리던 문제 해결)
+let cropBox=null;
+function bboxOfFrames(list){
+  let x0=1,y0=1,x1=0,y1=0,any=false;
+  for(const f of list){
+    for(const p of f.lm){
+      if(V(p)<0.3) continue;
+      any=true;
+      if(p.x<x0)x0=p.x; if(p.x>x1)x1=p.x;
+      if(p.y<y0)y0=p.y; if(p.y>y1)y1=p.y;
+    }
+  }
+  if(!any) return null;
+  const w=Math.max(0.02,x1-x0), h=Math.max(0.02,y1-y0);
+  // 여유: 좌우 넉넉히, 위쪽은 뻗은 팔·공이 잘리지 않게 더 넉넉히
+  x0-=w*0.40; x1+=w*0.40;
+  y0-=h*0.22; y1+=h*0.10;
+  return { x0:Math.max(0,x0), y0:Math.max(0,y0), x1:Math.min(1,x1), y1:Math.min(1,y1) };
+}
+// stageInner를 확대·이동시켜 박스가 화면 중앙에 크게 오도록
+function applyCrop(box){
+  cropBox=box||null;
+  const inner=$('stageInner');
+  const W=stage.clientWidth, H=stage.clientHeight;
+  const vw=video.videoWidth||0, vh=video.videoHeight||0;
+  if(!inner||!W||!H||!vw||!vh) return;
+  if(!box){   // 사람 미검출/초기 상태: 원본 비율 유지(contain). 100%로 두면 영상이 3:4로 왜곡된다
+    const arf=vw/vh; let Wf=Math.min(W, H*arf), Hf=Wf/arf;
+    inner.style.width=Wf+'px'; inner.style.height=Hf+'px';
+    inner.style.left=((W-Wf)/2)+'px'; inner.style.top=((H-Hf)/2)+'px';
+    return;
+  }
+  const ar=vw/vh;
+  const bw=Math.max(0.04, box.x1-box.x0), bh=Math.max(0.04, box.y1-box.y0);
+  // 박스가 화면의 ~95%를 채우도록 (가로·세로 둘 다 들어가는 쪽으로)
+  let Wi=Math.min((0.98*W)/bw, ((0.98*H)/bh)*ar);
+  let Hi=Wi/ar;
+  const cx=(box.x0+box.x1)/2, cy=(box.y0+box.y1)/2;
+  let left=W/2-cx*Wi, top=H/2-cy*Hi;
+  // ⚠ 여기서 화면을 꽉 채우려고(cover) 클램프하면 사람의 머리·발이 잘린다.
+  //   검은 여백이 생기더라도 "사람 전체가 보이는 것"을 우선한다. 되돌리지 말 것.
+  // 단, 영상이 화면보다 큰 방향으로는 검은 여백이 생기지 않게 최소한만 보정
+  if(Wi>=W) left=Math.min(0, Math.max(W-Wi, left));
+  if(Hi>=H) top =Math.min(0, Math.max(H-Hi, top));
+  inner.style.width=Wi+'px'; inner.style.height=Hi+'px';
+  inner.style.left=left+'px'; inner.style.top=top+'px';
+}
+window.addEventListener('resize', ()=>{ if(cropBox) applyCrop(cropBox); });
+
 // ---------- 그리기 ----------
 const CONN=[[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28],[15,19],[16,20]];
 function drawSkeleton(ctx,lm,w,h,clear){
@@ -504,15 +848,39 @@ function drawSkeleton(ctx,lm,w,h,clear){
   ctx.fillStyle='#fff';
   for(const p of lm){ if(V(p)<0.4)continue; ctx.beginPath(); ctx.arc(p.x*w,p.y*h,Math.max(2,w/160),0,7); ctx.fill(); }
 }
+// 썸네일: 그 프레임의 사람 위치를 중심으로 잘라내 중앙에 크게 보여준다
 function drawCapture(canvas, frame){
   const ctx=canvas.getContext('2d'), cw=canvas.width, ch=canvas.height;
   ctx.clearRect(0,0,cw,ch);
-  if(frame.bmp){
-    const vr=frame.bmp.width/frame.bmp.height, cr=cw/ch; let dw,dh,dx,dy;
-    if(vr>cr){ dh=ch; dw=ch*vr; dx=(cw-dw)/2; dy=0; } else { dw=cw; dh=cw/vr; dx=0; dy=(ch-dh)/2; }
-    ctx.drawImage(frame.bmp,dx,dy,dw,dh);
-    ctx.save(); ctx.translate(dx,dy); drawSkeleton(ctx,frame.lm,dw,dh,false); ctx.restore();
-  } else { ctx.fillStyle='#000'; ctx.fillRect(0,0,cw,ch); drawSkeleton(ctx,frame.lm,cw,ch,false); }
+  if(!frame.bmp){ ctx.fillStyle='#000'; ctx.fillRect(0,0,cw,ch); drawSkeleton(ctx,frame.lm,cw,ch,false); return; }
+  const bw=frame.bmp.width, bh=frame.bmp.height;
+  const box=bboxOfFrames([frame]) || {x0:0,y0:0,x1:1,y1:1};
+  // 소스 사각형(픽셀)
+  let sx=box.x0*bw, sy=box.y0*bh, sw=(box.x1-box.x0)*bw, sh=(box.y1-box.y0)*bh;
+  // 캔버스 비율(4:5)에 맞춰 확장 — 사람이 잘리지 않도록 넓히는 방향으로만
+  const car=cw/ch, sar=sw/sh;
+  if(sar<car){ const nw=sh*car; sx-=(nw-sw)/2; sw=nw; }
+  else       { const nh=sw/car; sy-=(nh-sh)/2; sh=nh; }
+  // 영상 밖으로 나가지 않게 보정
+  if(sw>bw){ const k=bw/sw; sw=bw; sh=sh*k; }
+  if(sh>bh){ const k=bh/sh; sh=bh; sw=sw*k; }
+  sx=Math.max(0, Math.min(bw-sw, sx));
+  sy=Math.max(0, Math.min(bh-sh, sy));
+  ctx.drawImage(frame.bmp, sx,sy,sw,sh, 0,0,cw,ch);
+  // 골격선도 같은 크롭 좌표계로 매핑
+  drawSkeletonMapped(ctx, frame.lm, p=>({ x:(p.x*bw-sx)/sw*cw, y:(p.y*bh-sy)/sh*ch }), cw);
+}
+// 임의 좌표 매핑으로 골격 그리기(크롭된 썸네일용)
+function drawSkeletonMapped(ctx, lm, map, refW){
+  ctx.lineWidth=Math.max(2, refW/120); ctx.strokeStyle='rgba(255,122,51,.95)';
+  for(const [a,b] of CONN){
+    if(V(lm[a])<0.4||V(lm[b])<0.4) continue;
+    const A=map(lm[a]), B=map(lm[b]);
+    ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();
+  }
+  ctx.fillStyle='#fff';
+  for(const p of lm){ if(V(p)<0.4) continue; const q=map(p);
+    ctx.beginPath(); ctx.arc(q.x,q.y,Math.max(2,refW/110),0,7); ctx.fill(); }
 }
 
 // ---------- 결과 렌더 ----------
