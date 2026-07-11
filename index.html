@@ -27,7 +27,10 @@
   .btn-rec{background:#e23b3b;color:#fff}
   .btn[disabled]{opacity:.5;cursor:not-allowed}
   .row{display:flex;gap:10px}
-  .row .btn{flex:1}
+  .row > *{flex:1 1 0;min-width:0}
+  .row .btn{width:100%;height:100%;padding:15px 8px}
+  .btn-file{background:#3d6cf5;color:#fff}
+  .btn-file:active{filter:brightness(.92)}
   input[type=file]{display:none}
   label.file{display:block;flex:1}
   .hint{font-size:12.5px;color:var(--sub);margin-top:12px;background:var(--card2);border-radius:10px;padding:11px 12px}
@@ -98,7 +101,7 @@
         <button class="btn btn-rec" id="camBtn">📹 카메라로 촬영</button>
         <label class="file">
           <input type="file" id="filePick" accept="video/*" />
-          <span class="btn btn-ghost">🖼️ 영상 불러오기</span>
+          <span class="btn btn-file">🖼️ 영상 불러오기</span>
         </label>
       </div>
       <!-- 폰 카메라 앱을 직접 여는 폴백. 브라우저 내장 카메라(getUserMedia)가 막혀도 동작한다 -->
